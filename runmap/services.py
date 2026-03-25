@@ -1,8 +1,9 @@
 import math
 import cv2
-import numpy as np
 import requests
 from django.contrib.gis.geos import LineString
+
+from .exceptions import RouteGenerationError, ContourExtractionError
 
 
 # ── 1. Вилучення контуру з зображення (OpenCV) ──────────────────────────────
@@ -14,7 +15,7 @@ def extract_contour(image_path: str) -> list[tuple[float, float]]:
     """
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
-        raise ValueError(f"Не вдалося відкрити зображення: {image_path}")
+        raise ContourExtractionError(f"Не вдалося відкрити зображення: {image_path}")
 
     # Розмиття для зменшення шуму
     blurred = cv2.GaussianBlur(img, (5, 5), 0)
@@ -25,7 +26,7 @@ def extract_contour(image_path: str) -> list[tuple[float, float]]:
     # Знаходимо всі контури
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
-        raise ValueError("Контури на зображенні не знайдено")
+        raise ContourExtractionError("Контури на зображенні не знайдено")
 
     # Беремо найбільший контур за площею
     largest = max(contours, key=cv2.contourArea)
@@ -45,7 +46,6 @@ def extract_contour(image_path: str) -> list[tuple[float, float]]:
 
 
 # ── 2. Проєкція пікселів → GPS ───────────────────────────────────────────────
-
 
 def project_to_gps(
     pixel_points: list[tuple[float, float]],
@@ -106,7 +106,7 @@ def match_route_with_osrm(
     data = response.json()
 
     if data.get("code") != "Ok":
-        raise ValueError(f"OSRM помилка: {data.get('code')} — {data.get('message', '')}")
+        raise RouteGenerationError(f"OSRM помилка: {data.get('code')} — {data.get('message', '')}")
 
     # route повертає routes[0], а не matchings[0]
     return data["routes"][0]["geometry"]["coordinates"]
@@ -124,7 +124,12 @@ def generate_route(
     """
     Повний пайплайн: зображення → контур → GPS → дороги → LineString.
     """
-    pixel_points = extract_contour(image_path)
-    gps_points = project_to_gps(pixel_points, center_lat, center_lon, radius_meters)
-    matched_points = match_route_with_osrm(gps_points, profile)
-    return LineString(matched_points, srid=4326)
+    try:
+        pixel_points = extract_contour(image_path)
+        gps_points = project_to_gps(pixel_points, center_lat, center_lon, radius_meters)
+        matched_points = match_route_with_osrm(gps_points, profile)
+        return LineString(matched_points, srid=4326)
+    except ContourExtractionError:
+        raise  # Прокидаємо далі, щоб views.py зловив як ContourExtractionError
+    except Exception as e:
+        raise RouteGenerationError(f"Помилка генерації маршруту: {str(e)}")

@@ -13,8 +13,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RouteSerializer(GeoFeatureModelSerializer):
     # Приймаємо lat/lon як окремі числа
-    lat = serializers.FloatField(write_only=True)
-    lon = serializers.FloatField(write_only=True)
+    lat = serializers.FloatField(write_only=True, required=False)
+    lon = serializers.FloatField(write_only=True, required=False)
 
     class Meta:
         model = Route

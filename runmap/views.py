@@ -1,13 +1,33 @@
+import tempfile, os, requests as http_requests
+import django_filters
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser
+from rest_framework.filters import OrderingFilter, SearchFilter
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
+from django.db import transaction
+
 from .models import Route
 from .serializers import RouteSerializer, UserSerializer
 from .services import generate_route, extract_contour, project_to_gps
-from rest_framework.decorators import action
-from rest_framework.parsers import MultiPartParser
-import tempfile, os, requests as http_requests
+from .exceptions import RouteGenerationError, ContourExtractionError
+
+
+class RouteFilter(django_filters.FilterSet):
+    """Фільтри для маршрутів."""
+    radius_min = django_filters.NumberFilter(field_name='radius', lookup_expr='gte')
+    radius_max = django_filters.NumberFilter(field_name='radius', lookup_expr='lte')
+    created_after = django_filters.DateFilter(field_name='created_at', lookup_expr='date__gte')
+
+    class Meta:
+        model = Route
+        fields = {
+            'user': ['exact'],
+            'name': ['exact'],
+        }
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -17,8 +37,6 @@ class UserViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
-            # 422 — дані отримані, але семантично некоректні
-            # (наприклад, username вже існує)
             return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -27,16 +45,14 @@ class UserViewSet(viewsets.ModelViewSet):
         try:
             return super().update(request, *args, **kwargs)
         except Exception:
-            # 409 — конфлікт (наприклад, спроба встановити вже зайнятий username)
             return Response(
                 {"error": "Конфлікт даних при оновленні користувача"},
                 status=status.HTTP_409_CONFLICT
             )
 
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()  # автоматично повертає 404 якщо не знайдено
+        instance = self.get_object()
         self.perform_destroy(instance)
-        # 204 — успішно видалено, тіло відповіді порожнє
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -44,73 +60,60 @@ class RouteViewSet(viewsets.ModelViewSet):
     queryset = Route.objects.all()
     serializer_class = RouteSerializer
 
+    # Підключаємо фільтрацію і сортування
+    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
+    filterset_class = RouteFilter
+    search_fields = ['name']
+    ordering_fields = ['created_at', 'radius', 'name']
+    ordering = ['-created_at']
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
-            # 422 — запит синтаксично правильний, але дані не валідні
             return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         if not request.FILES.get('image'):
-            # 400 — відсутнє обов'язкове поле
             return Response(
                 {"error": "Зображення є обов'язковим для генерації маршруту"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        route = serializer.save()
-
         try:
-            image_path = default_storage.path(route.image.name)
-            center_lon, center_lat = route.start_point.x, route.start_point.y
+            # Початок транзакції: якщо буде помилка, запис у БД не створиться
+            with transaction.atomic():
+                route = serializer.save()
 
-            line = generate_route(
-                image_path=image_path,
-                center_lat=center_lat,
-                center_lon=center_lon,
-                radius_meters=route.radius,
-                profile="foot"
-            )
-            route.path = line
-            route.save()
+                image_path = default_storage.path(route.image.name)
+                center_lon, center_lat = route.start_point.x, route.start_point.y
 
-        except ValueError as e:
-            route.delete()
-            # 422 — дані валідні, але обробка неможлива
-            # (наприклад, контур не знайдено на зображенні)
+                line = generate_route(
+                    image_path=image_path,
+                    center_lat=center_lat,
+                    center_lon=center_lon,
+                    radius_meters=route.radius,
+                    profile="foot"
+                )
+                route.path = line
+                route.save()
+
+        except RouteGenerationError as e:
+            # route.delete() більше не потрібен, транзакція відкотилася сама
+            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        except http_requests.exceptions.RequestException:
             return Response(
-                {"error": str(e)},
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY
-            )
-
-        except http_requests.exceptions.Timeout:
-            route.delete()
-            # 504 — зовнішній сервіс (OSRM) не відповів вчасно
-            return Response(
-                {"error": "Сервіс маршрутизації OSRM не відповідає. Спробуйте пізніше."},
-                status=status.HTTP_504_GATEWAY_TIMEOUT
-            )
-
-        except http_requests.exceptions.HTTPError as e:
-            route.delete()
-            # 502 — OSRM повернув помилку
-            return Response(
-                {"error": f"Помилка сервісу маршрутизації: {str(e)}"},
+                {"error": "Помилка зв'язку із сервісом маршрутизації OSRM. Спробуйте пізніше."},
                 status=status.HTTP_502_BAD_GATEWAY
             )
 
         except Exception as e:
-            route.delete()
-            # 500 — непередбачена внутрішня помилка
-            return Response(
-                {"error": f"Внутрішня помилка сервера: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"error": f"Внутрішня помилка сервера: {str(e)}"},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # 201 — ресурс успішно створено
         return Response(self.get_serializer(route).data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()  # 404 якщо не знайдено — автоматично
+        instance = self.get_object()
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -118,20 +121,14 @@ class RouteViewSet(viewsets.ModelViewSet):
     def preview_contour(self, request):
         image = request.FILES.get('image')
         if not image:
-            return Response(
-                {"error": "Зображення не передано"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Зображення не передано"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             lat = float(request.data.get('lat'))
             lon = float(request.data.get('lon'))
             radius = float(request.data.get('radius', 1000))
         except (TypeError, ValueError):
-            return Response(
-                {"error": "lat, lon та radius мають бути числами"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "lat, lon та radius мають бути числами"}, status=status.HTTP_400_BAD_REQUEST)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
             for chunk in image.chunks():
@@ -141,13 +138,11 @@ class RouteViewSet(viewsets.ModelViewSet):
         try:
             pixel_points = extract_contour(tmp_path)
             gps_points = project_to_gps(pixel_points, lat, lon, radius)
-        except ValueError as e:
-            # 422 — зображення отримане, але контур не знайдено
+        except ContourExtractionError as e:
             return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         finally:
             os.unlink(tmp_path)
 
-        # 200 — успішна відповідь (дані повернуто, нічого не створено)
         return Response({
             "type": "Feature",
             "geometry": {
@@ -156,3 +151,23 @@ class RouteViewSet(viewsets.ModelViewSet):
             },
             "properties": {"point_count": len(gps_points)}
         }, status=status.HTTP_200_OK)
+
+
+
+# Фільтрація:
+#
+# GET /api/routes/?user=1                          → маршрути конкретного користувача
+# GET /api/routes/?radius_min=500&radius_max=2000  → маршрути з радіусом 500-2000м
+# GET /api/routes/?created_after=2026-01-01        → маршрути після дати
+# GET /api/routes/?search=кіт                      → пошук по назві
+#
+#
+# Сортування:
+#
+# GET /api/routes/?ordering=radius         → від меншого радіуса до більшого
+# GET /api/routes/?ordering=-created_at    → від новіших до старіших
+#
+#
+# Пагінація (працює автоматично):
+#
+# GET /api/routes/?page=2                  → друга сторінка
