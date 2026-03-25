@@ -1,137 +1,145 @@
-from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.contrib.auth.models import User
-from django.core.files.storage import default_storage
-from .models import Route
-from .serializers import RouteSerializer, UserSerializer
-from .services import generate_route, extract_contour, project_to_gps
-from rest_framework.decorators import action
+from rest_framework import status
 from rest_framework.parsers import MultiPartParser
-import tempfile, os, requests as http_requests
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+import tempfile, os
+
+from .serializers import UserSerializer, RouteSerializer
+from .models import (
+    get_all_users, get_user_by_id, create_user, update_user, delete_user,
+    get_all_routes, get_route_by_id, create_route, update_route_path, delete_route
+)
+from .services import generate_route, extract_contour, project_to_gps
 
 
-class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+# ── Користувачі ───────────────────────────────────────────────────────────────
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if not serializer.is_valid():
-            # 422 — дані отримані, але семантично некоректні
-            # (наприклад, username вже існує)
-            return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.perform_create(serializer)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+class UserListView(APIView):
+    """GET /api/users/ та POST /api/users/"""
 
-    def update(self, request, *args, **kwargs):
-        try:
-            return super().update(request, *args, **kwargs)
-        except Exception:
-            # 409 — конфлікт (наприклад, спроба встановити вже зайнятий username)
-            return Response(
-                {"error": "Конфлікт даних при оновленні користувача"},
-                status=status.HTTP_409_CONFLICT
-            )
+    def get(self, request):
+        users = get_all_users()
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
 
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()  # автоматично повертає 404 якщо не знайдено
-        self.perform_destroy(instance)
-        # 204 — успішно видалено, тіло відповіді порожнє
+    def post(self, request):
+        serializer = UserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = create_user(
+            username=serializer.validated_data['username'],
+            email=serializer.validated_data.get('email', '')
+        )
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+class UserDetailView(APIView):
+    """GET /api/users/{id}/, PATCH /api/users/{id}/, DELETE /api/users/{id}/"""
+
+    def get(self, request, pk):
+        user = get_user_by_id(pk)
+        if not user:
+            return Response({"error": "Користувача не знайдено"}, status=404)
+        return Response(UserSerializer(user).data)
+
+    def patch(self, request, pk):
+        user = get_user_by_id(pk)
+        if not user:
+            return Response({"error": "Користувача не знайдено"}, status=404)
+        serializer = UserSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated = update_user(pk, serializer.validated_data)
+        return Response(UserSerializer(updated).data)
+
+    def delete(self, request, pk):
+        if not delete_user(pk):
+            return Response({"error": "Користувача не знайдено"}, status=404)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class RouteViewSet(viewsets.ModelViewSet):
-    queryset = Route.objects.all()
-    serializer_class = RouteSerializer
+# ── Маршрути ──────────────────────────────────────────────────────────────────
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if not serializer.is_valid():
-            # 422 — запит синтаксично правильний, але дані не валідні
-            return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+class RouteListView(APIView):
+    """GET /api/routes/ та POST /api/routes/"""
+    parser_classes = [MultiPartParser]
 
-        if not request.FILES.get('image'):
-            # 400 — відсутнє обов'язкове поле
-            return Response(
-                {"error": "Зображення є обов'язковим для генерації маршруту"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    def get(self, request):
+        routes = get_all_routes()
+        serializer = RouteSerializer(routes, many=True)
+        return Response(serializer.data)
 
-        route = serializer.save()
+    def post(self, request):
+        serializer = RouteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
 
+        # Зберігаємо зображення на диск (для OpenCV)
+        image_path = None
+        if 'image' in request.FILES:
+            image_file = request.FILES['image']
+            save_path = f"route_images/{image_file.name}"
+            default_storage.save(save_path, ContentFile(image_file.read()))
+            image_path = default_storage.path(save_path)
+
+        # Створюємо запис у пам'яті
+        route = create_route(
+            name=d['name'],
+            user_id=d['user_id'],
+            start_lat=d['lat'],
+            start_lon=d['lon'],
+            radius=d['radius'],
+            image_path=image_path,
+        )
+
+        # Генеруємо маршрут
         try:
-            image_path = default_storage.path(route.image.name)
-            center_lon, center_lat = route.start_point.x, route.start_point.y
-
-            line = generate_route(
+            coordinates = generate_route(
                 image_path=image_path,
-                center_lat=center_lat,
-                center_lon=center_lon,
-                radius_meters=route.radius,
+                center_lat=d['lat'],
+                center_lon=d['lon'],
+                radius_meters=d['radius'],
                 profile="foot"
             )
-            route.path = line
-            route.save()
-
-        except ValueError as e:
-            route.delete()
-            # 422 — дані валідні, але обробка неможлива
-            # (наприклад, контур не знайдено на зображенні)
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY
-            )
-
-        except http_requests.exceptions.Timeout:
-            route.delete()
-            # 504 — зовнішній сервіс (OSRM) не відповів вчасно
-            return Response(
-                {"error": "Сервіс маршрутизації OSRM не відповідає. Спробуйте пізніше."},
-                status=status.HTTP_504_GATEWAY_TIMEOUT
-            )
-
-        except http_requests.exceptions.HTTPError as e:
-            route.delete()
-            # 502 — OSRM повернув помилку
-            return Response(
-                {"error": f"Помилка сервісу маршрутизації: {str(e)}"},
-                status=status.HTTP_502_BAD_GATEWAY
-            )
-
+            update_route_path(route['id'], coordinates)
+            route['path'] = coordinates
         except Exception as e:
-            route.delete()
-            # 500 — непередбачена внутрішня помилка
+            delete_route(route['id'])
             return Response(
-                {"error": f"Внутрішня помилка сервера: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": f"Помилка генерації: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 201 — ресурс успішно створено
-        return Response(self.get_serializer(route).data, status=status.HTTP_201_CREATED)
+        return Response(RouteSerializer(route).data, status=status.HTTP_201_CREATED)
 
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()  # 404 якщо не знайдено — автоматично
-        self.perform_destroy(instance)
+
+class RouteDetailView(APIView):
+    """GET /api/routes/{id}/, DELETE /api/routes/{id}/"""
+
+    def get(self, request, pk):
+        route = get_route_by_id(pk)
+        if not route:
+            return Response({"error": "Маршрут не знайдено"}, status=404)
+        return Response(RouteSerializer(route).data)
+
+    def delete(self, request, pk):
+        if not delete_route(pk):
+            return Response({"error": "Маршрут не знайдено"}, status=404)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser])
-    def preview_contour(self, request):
-        image = request.FILES.get('image')
-        if not image:
-            return Response(
-                {"error": "Зображення не передано"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
-        try:
-            lat = float(request.data.get('lat'))
-            lon = float(request.data.get('lon'))
-            radius = float(request.data.get('radius', 1000))
-        except (TypeError, ValueError):
-            return Response(
-                {"error": "lat, lon та radius мають бути числами"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+class PreviewContourView(APIView):
+    """POST /api/routes/preview_contour/"""
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        image = request.FILES.get('image')
+        lat = float(request.data.get('lat'))
+        lon = float(request.data.get('lon'))
+        radius = float(request.data.get('radius', 1000))
+
+        if not image:
+            return Response({"error": "Зображення не передано"}, status=400)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
             for chunk in image.chunks():
@@ -141,13 +149,9 @@ class RouteViewSet(viewsets.ModelViewSet):
         try:
             pixel_points = extract_contour(tmp_path)
             gps_points = project_to_gps(pixel_points, lat, lon, radius)
-        except ValueError as e:
-            # 422 — зображення отримане, але контур не знайдено
-            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         finally:
             os.unlink(tmp_path)
 
-        # 200 — успішна відповідь (дані повернуто, нічого не створено)
         return Response({
             "type": "Feature",
             "geometry": {
@@ -155,4 +159,51 @@ class RouteViewSet(viewsets.ModelViewSet):
                 "coordinates": [[lon, lat] for lat, lon in gps_points]
             },
             "properties": {"point_count": len(gps_points)}
-        }, status=status.HTTP_200_OK)
+        })
+
+
+class RouteGeoJSONView(APIView):
+    """GET /api/routes/{id}/geojson/"""
+
+    def get(self, request, pk):
+        route = get_route_by_id(pk)
+        if not route:
+            return Response({"error": "Маршрут не знайдено"}, status=404)
+
+        # Convert path to GeoJSON format
+        coordinates = route.get('path', [])
+        if not coordinates or not isinstance(coordinates[0], (list, tuple)):
+            coordinates = []
+
+        geojson = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": coordinates
+                    },
+                    "properties": {
+                        "id": route['id'],
+                        "name": route['name'],
+                        "user_id": route['user_id'],
+                        "radius": route['radius'],
+                        "created_at": str(route['created_at'])
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [route['start_lon'], route['start_lat']]
+                    },
+                    "properties": {
+                        "name": f"{route['name']} (Start)",
+                        "type": "start_point"
+                    }
+                }
+            ]
+        }
+
+        return Response(geojson)

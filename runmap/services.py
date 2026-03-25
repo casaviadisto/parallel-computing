@@ -120,11 +120,8 @@ def generate_route(
     center_lon: float,
     radius_meters: float = 1000,
     profile: str = "foot"
-) -> LineString:
-    """
-    Повний пайплайн: зображення → контур → GPS → дороги → LineString.
-    """
-    pixel_points = extract_contour(image_path)
-    gps_points = project_to_gps(pixel_points, center_lat, center_lon, radius_meters)
+) -> list:
+    pixel_points   = extract_contour(image_path)
+    gps_points     = project_to_gps(pixel_points, center_lat, center_lon, radius_meters)
     matched_points = match_route_with_osrm(gps_points, profile)
-    return LineString(matched_points, srid=4326)
+    return matched_points  # просто список [[lon,lat], [lon,lat], ...]
