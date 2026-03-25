@@ -1,8 +1,6 @@
 import math
 import cv2
-import numpy as np
 import requests
-from django.contrib.gis.geos import LineString
 
 
 # ── 1. Вилучення контуру з зображення (OpenCV) ──────────────────────────────
