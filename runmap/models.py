@@ -7,7 +7,7 @@ class Route(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='routes')
 
     # Параметри генерації
-    start_point = models.PointField()  # GPS-точка старту
+    start_point = models.PointField(null=True, blank=True)  # GPS-точка старту
     radius = models.FloatField(help_text="Радіус у метрах")
     image = models.ImageField(upload_to='route_images/', null=True, blank=True)
 
