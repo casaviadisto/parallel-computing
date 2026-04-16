@@ -4,7 +4,7 @@
 **RunMap** — це веб-застосунок для перетворення намальованого контуру зображення на реальний маршрут для бігу або прогулянки, який можна експортувати у GPX.  
 Проект використовує афінну трансформацію для точного припасування малюнка до карти та **OSRM** для прокладання шляху дорогами.
 
-[//]: # (![RunMap Screenshot]&#40;docs/screenshot.png&#41; *&#40;додайте скріншот за бажанням&#41;*)
+![RunMap Screenshot](preview.png) 
 
 ## Можливості
 
@@ -29,27 +29,27 @@
 - **Vite** (збірка)
 - **Axios** (HTTP-клієнт)
 
-## 📋 Передумови
+## Передумови
 
 - **Python 3.12+**
 - **Node.js 18+** та **npm**
 - **PostgreSQL 14+** із розширенням **PostGIS**
 - **OSRM** (локальний сервер або Docker-контейнер)
 
-## ⚙️ Встановлення та запуск
+## Встановлення та запуск
 
 ### 1. Клонування репозиторію
 
 ```bash
-git clone https://github.com/your-username/runmap.git
+git clone https://github.com/casaviadisto/parallel-computing/tree/LR4-ful
 cd runmap
-
+```
 
 ### 2. Налаштування бази даних (PostgreSQL + PostGIS)
 
 Створіть базу даних та активуйте розширення PostGIS:
 
-
+```bash
 CREATE DATABASE runmap;
 CREATE USER runmap_user WITH PASSWORD 'runmap_user';
 ALTER ROLE runmap_user SET client_encoding TO 'utf8';
@@ -180,4 +180,3 @@ runmap/
 
 - [OpenStreetMap](https://www.openstreetmap.org) та [OSRM](http://project-osrm.org) за картографічні дані та маршрутизацію.
 - [Leaflet](https://leafletjs.com) за чудову бібліотеку карт.
-```
