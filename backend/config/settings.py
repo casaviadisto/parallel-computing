@@ -20,12 +20,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-onj+(m&s8jm)%1l#u9(=skkxp)dw9ka0i(lz^n1(b_*yu0oidq'
-
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key')
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -95,13 +94,14 @@ REST_FRAMEWORK = {
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+import dj_database_url
 DATABASES = {
     'default': {
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': 'runmap',
-        'USER': 'runmap_user',
-        'PASSWORD': 'runmap_user',
-        'HOST': 'localhost',
+        'NAME': os.environ.get('POSTGRES_DB', 'runmap'),
+        'USER': os.environ.get('POSTGRES_USER', 'runmap_user'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'runmap_user'),
+        'HOST': 'db',
         'PORT': '5432',
     }
 }
@@ -139,10 +139,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 CORS_ALLOW_ALL_ORIGINS = True
-OSRM_BASE_URL = "http://127.0.0.1:5000"
+OSRM_BASE_URL = os.environ.get('OSRM_BASE_URL', 'http://osrm:5000')
 
 from datetime import timedelta
 

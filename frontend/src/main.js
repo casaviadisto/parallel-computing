@@ -1,7 +1,8 @@
 import L from 'leaflet';
 import axios from 'axios';
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+// const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = '/api';
 let map;
 let userId = null;
 let accessToken = null;
