@@ -10,7 +10,7 @@ from django.conf import settings
 from .exceptions import RouteGenerationError, ContourExtractionError
 
 
-# ── 1. Извлечение контура ─────────────────────────────────────────────────────
+# ── 1. Отримання контуру ─────────────────────────────────────────────────────
 def extract_contour(image_path: str) -> list[tuple[float, float]]:
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
@@ -27,30 +27,30 @@ def extract_contour(image_path: str) -> list[tuple[float, float]]:
     simplified = cv2.approxPolyDP(largest, epsilon, closed=True)
     points = [(int(p[0][0]), int(p[0][1])) for p in simplified]
 
-    # Замыкаем контур, если нужно
+    # Замикаємо контур, якщо потрібно
     if points and points[0] != points[-1]:
         points.append(points[0])
     return points
 
 
-# ── 2. Аффинное проецирование ─────────────────────────────────────────────────
+# ── 2. Аффіне проектування ─────────────────────────────────────────────────
 def compute_affine_from_corners(pixel_corners, geo_corners):
     """
-    Вычисляет Affine-трансформацию из пиксельных координат в географические (lon, lat).
-    pixel_corners: список из 3 точек в пикселях [(0,0), (width,0), (0,height)]
-    geo_corners: соответствующие точки в GPS [(lon1,lat1), (lon2,lat2), (lon3,lat3)]
-    Возвращает объект Affine.
+    Вичисляє Affine-трансформацію з піксельних координат в географічні (lon, lat).
+    pixel_corners: список з 3 точок в пікселях [(0,0), (width,0), (0,height)]
+    geo_corners: відповідні точки в GPS [(lon1,lat1), (lon2,lat2), (lon3,lat3)]
+    Повертає обєкт Affine.
     """
     src = np.array(pixel_corners)
     dst = np.array(geo_corners)
-    # Добавляем столбец единиц
+    # Добавляєм ствобчик одиниць
     A = np.hstack([src, np.ones((3, 1))])
-    # Решаем A * M = dst, M имеет форму (3,2)
+    # Вирішуємо A * M = dst, M має форму (3,2)
     M, _, _, _ = np.linalg.lstsq(A, dst, rcond=None)
 
-    # Коэффициенты для lon (первый столбец dst)
+    # Коефіцієнт для lon (перший стовбчик dst)
     a, b, c = M[0, 0], M[1, 0], M[2, 0]
-    # Коэффициенты для lat (второй столбец dst)
+    # Коефіцієнт для lat (другий стовбчик dst)
     d, e, f = M[0, 1], M[1, 1], M[2, 1]
 
     return Affine(a, b, c, d, e, f)
@@ -83,7 +83,7 @@ def project_with_affine(pixel_points, width, height, corners, input_order='latlo
     return gps_points
 
 
-# ── 3. Старая функция проецирования (центр + радиус) ─────────────────────────
+# ── 3. Стара функція проецирования (центр + радіус) ─────────────────────────
 def project_to_gps(pixel_points, center_lat, center_lon, radius_meters):
     if not pixel_points:
         return []
@@ -108,26 +108,26 @@ def project_to_gps(pixel_points, center_lat, center_lon, radius_meters):
     return gps_points
 
 
-# ── 4. Маршрутизация через OSRM ───────────────────────────────────────────────
+# ── 4. Маршрутизація через OSRM ───────────────────────────────────────────────
 def match_route_with_osrm(gps_points, profile="foot"):
     """
-    Строит маршрут по дорогам через OSRM.
+    Будує маршут по дорогам через OSRM.
     gps_points: список (lat, lon)
-    profile: 'foot' или 'bike'
-    Возвращает список координат [[lon, lat], ...] в формате GeoJSON.
+    profile: 'foot' або 'bike'
+    Повертає список координат [[lon, lat], ...] в форматі GeoJSON.
     """
     if not gps_points:
         raise RouteGenerationError("Нет точек для маршрутизации")
 
     MAX_POINTS = 99
     if len(gps_points) > MAX_POINTS:
-        # Прореживаем точки равномерно
+        # Проріжує точки рівномірно
         indices = [int(i * (len(gps_points) - 1) / (MAX_POINTS - 1)) for i in range(MAX_POINTS)]
         gps_points = [gps_points[i] for i in indices]
 
     coords_str = ";".join(f"{lon},{lat}" for lat, lon in gps_points)
 
-    # Берём URL из настроек
+    # Беремо URL з налаштувань
     base_url = getattr(settings, 'OSRM_BASE_URL', 'http://router.project-osrm.org')
     url = f"{base_url}/route/v1/{profile}/{coords_str}"
 
@@ -155,10 +155,10 @@ def match_route_with_osrm(gps_points, profile="foot"):
     return data["routes"][0]["geometry"]["coordinates"]
 
 
-# ── 5. Главная функция генерации (старый режим) ───────────────────────────────
+# ── 5. Головна функція генерації (старий режим) ───────────────────────────────
 def generate_route(image_path, center_lat, center_lon, radius_meters=1000, profile="foot"):
     """
-    Полный пайплайн для старого режима: изображение → контур → GPS (центр+радиус) → дороги.
+    Повний пайплайн для старого режима: зображення → контур → GPS (центр+радиус) → дороги.
     """
     try:
         pixel_points = extract_contour(image_path)
@@ -179,19 +179,19 @@ def generate_route(image_path, center_lat, center_lon, radius_meters=1000, profi
         raise RouteGenerationError(f"Помилка генерації маршруту: {str(e)}")
 
 
-# ── 6. Новая функция для аффинного режима (для удобства) ─────────────────────
+# ── 6. Нова функція для аффінного режима (для зручності) ─────────────────────
 def generate_route_affine(image_path, corners, profile="foot", input_order='latlon'):
     """
-    Полный пайплайн для нового режима: изображение → контур → аффинное проецирование → дороги.
+    Повний пайплайн для нового режиму: зображення → контур → аффінне проецирование → дороги.
     """
     try:
-        # Получаем размеры изображения
+        # Отримуємо розміри зображення
         img = cv2.imread(image_path)
         if img is None:
             raise RouteGenerationError("Не вдалося прочитати зображення")
         height, width = img.shape[:2]
 
-        # Извлекаем контур
+        # Отримуємо контур
         pixel_points = extract_contour(image_path)
         if not pixel_points:
             raise RouteGenerationError("Не удалось извлечь контур")
@@ -201,7 +201,7 @@ def generate_route_affine(image_path, corners, profile="foot", input_order='latl
         if not gps_contour:
             raise RouteGenerationError("Не удалось спроецировать контур")
 
-        # Строим маршрут
+        # Будуємо маршрут
         route_coords = match_route_with_osrm(gps_contour, profile)
         return LineString(route_coords, srid=4326)
     except ContourExtractionError:

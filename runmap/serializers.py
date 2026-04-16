@@ -40,11 +40,11 @@ class RouteSerializer(GeoFeatureModelSerializer):
         lon = validated_data.pop('lon', None)
         radius = validated_data.pop('radius', 1000.0)
 
-        # Если переданы lat/lon – создаём start_point
+        # Якщо передани lat/lon – створюєм start_point
         if lat is not None and lon is not None:
             validated_data['start_point'] = Point(lon, lat, srid=4326)
         else:
-            # Иначе start_point будет заполнен позже (при наличии corners)
+            # Інакше start_point буде заповнений пізніше (при наявності corners)
             validated_data['start_point'] = None
 
         validated_data['radius'] = radius

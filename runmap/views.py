@@ -80,7 +80,7 @@ class RouteViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def create(self, request, *args, **kwargs):
-        # копируем данные запроса и добавляем user
+        # копіюємо дані запиту і добавляємо user
         data = request.data.copy()
         data['user'] = request.user.id
         image_file = request.FILES.get('image')
@@ -99,12 +99,12 @@ class RouteViewSet(viewsets.ModelViewSet):
 
         try:
             with transaction.atomic():
-                route = serializer.save()  # объект создан, start_point может быть None
+                route = serializer.save()  # обєкт створений, start_point може бути None
 
                 image_path = default_storage.path(route.image.name)
 
                 if corners_str:
-                    # Новый режим: аффинное проецирование по углам
+                    # Новий режим: аффінне проецирование по кутам
                     try:
                         corners = json.loads(corners_str)
                     except json.JSONDecodeError:
@@ -125,11 +125,11 @@ class RouteViewSet(viewsets.ModelViewSet):
                     route_coords = match_route_with_osrm(gps_contour, profile)
                     line = LineString(route_coords, srid=4326)
 
-                    # Автоматически вычисляем центр и радиус
+                    # Автоматично вираховуємо центр і радіус
                     if line:
                         centroid = line.centroid
                         route.start_point = Point(centroid.x, centroid.y, srid=4326)
-                        # Грубая оценка радиуса
+                        # Груба оцінка радіуса
                         extent = line.envelope.extent  # (xmin, ymin, xmax, ymax)
                         if extent:
                             import math
@@ -139,7 +139,7 @@ class RouteViewSet(viewsets.ModelViewSet):
                         else:
                             route.radius = 1000.0
                 else:
-                    # Старый режим: центр + радиус
+                    # Старий режим: центр + радіус
                     lat = serializer.validated_data.get('lat')
                     lon = serializer.validated_data.get('lon')
                     radius = serializer.validated_data.get('radius', 1000.0)
@@ -181,7 +181,7 @@ class RouteViewSet(viewsets.ModelViewSet):
         corners_str = request.data.get('corners')
 
         if corners_str:
-            # ── НОВЫЙ РЕЖИМ: аффинное проецирование по углам ─────────────────────────
+            # ── НОВИЙ РЕЖИМ: аффінне проецирование по кутам ─────────────────────────
             profile = request.data.get('profile', 'foot')
             try:
                 corners = json.loads(corners_str)
@@ -209,7 +209,7 @@ class RouteViewSet(viewsets.ModelViewSet):
                     pixel_points, width, height, corners, input_order='latlon'
                 )
 
-                # Опциональное построение маршрута
+                # Опціональна побудова маршрута
                 include_route = request.data.get('route', '').lower() == 'true'
                 route_geojson = None
                 if include_route:
@@ -234,7 +234,7 @@ class RouteViewSet(viewsets.ModelViewSet):
                 os.unlink(tmp_path)
 
         else:
-            # ── СТАРЫЙ РЕЖИМ: центр + радиус (обратная совместимость) ───────────────
+            # ── СТАРИЙ РЕЖИМ: центр + радіус (зворотня сумісність) ───────────────
             try:
                 lat = float(request.data.get('lat'))
                 lon = float(request.data.get('lon'))
@@ -268,16 +268,16 @@ class RouteViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser])
     def preview_route(self, request):
         """
-        Новый эндпоинт для предпросмотра контура и маршрута по дорогам.
-        Принимает:
-            - image: файл изображения
-            - corners: JSON-строка с массивом из 3 (или 4) точек в формате [[lat1,lon1], [lat2,lon2], [lat3,lon3]]
-            - profile: 'foot' или 'bike' (по умолчанию 'foot')
-        Возвращает:
-            {
-                "contour": GeoJSON LineString,
-                "route": GeoJSON LineString
-            }
+        Новий ендпоінт для перегляду контуру та маршруту дорогами.
+        Приймає:
+        - image: файл зображення
+        - corners: JSON-рядок з масивом з 3 (або 4) точок у форматі [[lat1,lon1], [lat2,lon2], [lat3,lon3]]
+        - profile: 'foot' або 'bike' (за замовчуванням 'foot')
+        Повертає:
+        {
+        "contour": GeoJSON LineString,
+        "route": GeoJSON LineString
+        }
         """
         image = request.FILES.get('image')
         corners_str = request.data.get('corners')
@@ -309,7 +309,7 @@ class RouteViewSet(viewsets.ModelViewSet):
 
             pixel_points = extract_contour(tmp_path)
 
-            # Проецируем контур (corners в формате lat, lon)
+            # Проектуємо контур (corners в формате lat, lon)
             gps_contour = project_with_affine(pixel_points, width, height, corners, input_order='latlon')
 
             route_coords = match_route_with_osrm(gps_contour, profile)
