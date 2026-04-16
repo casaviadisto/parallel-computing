@@ -4,10 +4,10 @@ import json
 import tempfile
 import os
 import cv2
-import requests as http_requests
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
@@ -45,6 +45,7 @@ class RouteFilter(django_filters.FilterSet):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    search_fields = ['username']
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -69,6 +70,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 class RouteViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset = Route.objects.all()
     serializer_class = RouteSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
@@ -78,6 +80,9 @@ class RouteViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def create(self, request, *args, **kwargs):
+        # копируем данные запроса и добавляем user
+        data = request.data.copy()
+        data['user'] = request.user.id
         image_file = request.FILES.get('image')
         if not image_file:
             return Response(
@@ -85,7 +90,7 @@ class RouteViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        serializer = self.get_serializer(data=request.data)
+        serializer = self.get_serializer(data=data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
