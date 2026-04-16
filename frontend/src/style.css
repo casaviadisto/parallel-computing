@@ -1,0 +1,303 @@
+html, body, #map {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#sidebar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  z-index: 1000;
+  width: 260px;
+  font-family: sans-serif;
+}
+
+#user-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+#auth-buttons button {
+  width: auto;
+  padding: 5px 10px;
+  margin: 0 5px 0 0;
+}
+
+#user-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#user-info span {
+  font-weight: bold;
+}
+
+#dropzone {
+  border: 2px dashed #ccc;
+  border-radius: 12px;
+  padding: 16px 12px;
+  text-align: center;
+  margin: 15px 0;
+  cursor: pointer;
+  background: #f9f9fc;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+}
+
+#dropzone:hover {
+  border-color: #1a73e8;
+  background: #f0f7ff;
+}
+
+#dropzone.dragover {
+  border-color: #1a73e8;
+  background: #e3f2fd;
+  border-style: solid;
+}
+
+.dropzone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.upload-icon {
+  color: #6b7280;
+  margin-bottom: 8px;
+  transition: color 0.2s;
+}
+
+#dropzone:hover .upload-icon {
+  color: #1a73e8;
+}
+
+.dropzone-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.dropzone-title {
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 0.95rem;
+}
+
+.dropzone-subtitle {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.browse-btn {
+  width: auto;
+  padding: 6px 18px;
+  margin: 4px 0 6px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 2px 4px rgba(26, 115, 232, 0.2);
+}
+
+.browse-btn:hover {
+  background: #1558b0;
+  transform: scale(1.02);
+}
+
+.file-name {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #1a73e8;
+  font-weight: 500;
+  word-break: break-word;
+  max-width: 100%;
+  background: rgba(26, 115, 232, 0.08);
+  padding: 4px 10px;
+  border-radius: 20px;
+  display: inline-block;
+}
+
+#route-info {
+  margin: 10px 0;
+  font-weight: bold;
+  text-align: center;
+}
+
+button {
+  width: 100%;
+  padding: 8px;
+  margin-top: 8px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1558b0;
+}
+
+#status {
+  margin-top: 10px;
+  font-size: 0.9em;
+  color: #555;
+}
+
+/* Модальне вікно */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 2000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: 15% auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 300px;
+  border-radius: 8px;
+  position: relative;
+}
+
+.close {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  position: absolute;
+  right: 10px;
+  top: 5px;
+}
+
+.close:hover {
+  color: black;
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 8px;
+  margin: 8px 0;
+  box-sizing: border-box;
+}
+
+.modal-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+#modal-switch {
+  background: none;
+  color: #1a73e8;
+  text-decoration: underline;
+  box-shadow: none;
+  padding: 5px;
+}
+
+#modal-switch:hover {
+  background: #f0f0f0;
+}
+
+/* Маркер обертання */
+.rotate-marker {
+  background: #ff7800;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  line-height: 24px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+  cursor: grab;
+}
+.rotate-marker:active {
+  cursor: grabbing;
+}
+
+/* Стилі для списку маршрутів */
+#routes-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+
+.route-item {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #f9f9f9;
+}
+
+.route-item h4 {
+  margin: 0 0 5px;
+}
+
+.route-item p {
+  margin: 0 0 8px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.route-actions button {
+  width: auto;
+  padding: 4px 8px;
+  margin-right: 5px;
+  font-size: 0.8em;
+}
+
+/* Кнопка закриття модального вікна маршрутів */
+.close-routes {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  position: absolute;
+  right: 10px;
+  top: 5px;
+}
+.close-routes:hover {
+  color: black;
+}
+
+#route-name-section {
+  margin: 10px 0;
+}
+#route-name-section label {
+  display: block;
+  font-size: 0.9em;
+  margin-bottom: 4px;
+}
+#route-name-section input {
+  width: 100%;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}

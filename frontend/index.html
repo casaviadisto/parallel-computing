@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RunMap – GPS Арт (резинова трансформація)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+<div id="map"></div>
+
+<div id="sidebar">
+  <div id="user-section">
+    <div id="auth-buttons">
+      <button id="login-btn">Увійти</button>
+      <button id="register-btn">Зареєструватися</button>
+    </div>
+    <div id="user-info" style="display:none;">
+      <span id="display-username"></span>
+      <button id="logout-btn">Вийти</button>
+    </div>
+  </div>
+
+  <div id="dropzone">
+    <div class="dropzone-content">
+      <svg class="upload-icon" viewBox="0 0 24 24" width="40" height="40">
+        <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+        <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+      </svg>
+      <div class="dropzone-text">
+        <span class="dropzone-title">Перетягніть зображення сюди</span>
+        <span class="dropzone-subtitle">або</span>
+      </div>
+      <button type="button" id="browse-btn" class="browse-btn">Обрати файл</button>
+      <input type="file" id="file-input" accept="image/*" style="display: none;" />
+      <div id="file-name" class="file-name"></div>
+    </div>
+  </div>
+
+  <div id="route-info">
+    <span id="distance-display">Дистанція: -- км</span>
+  </div>
+
+  <div id="route-name-section">
+    <label for="route-name">Назва маршруту:</label>
+    <input type="text" id="route-name" placeholder="Мій маршрут" value="Мій GPS-арт" />
+  </div>
+
+  <button id="export-gpx-btn">Завантажити GPX</button>
+  <button id="save-route-btn">Зберегти маршрут</button>
+  <button id="my-routes-btn">Мої маршрути</button>
+  <div id="status"></div>
+</div>
+
+<!-- Модальне вікно аутентифікації -->
+<div id="auth-modal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2 id="modal-title">Вхід</h2>
+    <input type="text" id="auth-username" placeholder="Логін" />
+    <input type="password" id="auth-password" placeholder="Пароль" />
+    <!-- поле email для регистрации показываем только в режиме register -->
+    <input type="email" id="auth-email" placeholder="Email" style="display:none;" />
+    <div class="modal-buttons">
+      <button id="modal-submit">Увійти</button>
+      <button id="modal-switch">Немає облікового запису? Зареєструватися</button>
+    </div>
+    <div id="modal-error" style="color:red;"></div>
+  </div>
+</div>
+
+<!-- Модальне вікно списку маршрутів -->
+<div id="routes-modal" class="modal">
+  <div class="modal-content" style="width: 400px;">
+    <span class="close-routes">&times;</span>
+    <h2>Мої маршрути</h2>
+    <div id="routes-list">Завантаження...</div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
