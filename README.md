@@ -2,9 +2,9 @@
 # RunMap – Генератор GPS-арту з зображень
 
 **RunMap** — це веб-застосунок для перетворення намальованого контуру зображення на реальний маршрут для бігу або прогулянки, який можна експортувати у GPX.  
-Проект використовує афінну трансформацію для точного припасування малюнка до карти та **OSRM** для прокладання шляху дорогами.
+Проєкт використовує афінну трансформацію для точного припасування малюнка до карти та **OSRM** для прокладання шляху дорогами.
 
-![RunMap Screenshot](preview.png) 
+![RunMap Screenshot](preview.png)
 
 ## Можливості
 
@@ -28,117 +28,72 @@
 - **Leaflet** (інтерактивна карта)
 - **Vite** (збірка)
 
-## Передумови
+## Швидкий старт із Docker Compose (рекомендовано)
 
-- **Python 3.12+**
-- **Node.js 18+** та **npm**
-- **PostgreSQL 14+** із розширенням **PostGIS**
-- **OSRM** (локальний сервер або Docker-контейнер)
+Найпростіший спосіб запустити весь проєкт — використати Docker Compose. Усі сервіси (база даних, бекенд, фронтенд, OSRM) будуть розгорнуті в ізольованих контейнерах.
 
-## Встановлення та запуск
+### Передумови
 
-### 1. Клонування репозиторію
+- **Docker** та **Docker Compose** (версія 1.29+)
+- Достатньо вільного місця на диску (для образу OSRM та карти)
 
-```bash
-git clone https://github.com/casaviadisto/parallel-computing/tree/LR4-ful
-cd runmap
-```
+### Кроки
 
-### 2. Налаштування бази даних (PostgreSQL + PostGIS)
+1. **Клонуйте репозиторій**  
+   ```bash
+   git clone https://github.com/casaviadisto/parallel-computing/tree/LR5
+   cd runmap
+   ```
 
-Створіть базу даних та активуйте розширення PostGIS:
+2. **Підготуйте картографічні дані для OSRM**  
+   Помістіть файл `kyiv_small.osm.pbf` (або інший `.osm.pbf`) у директорію `map_data/`.  
+   > Ви можете завантажити мапу України з [Geofabrik](https://download.geofabrik.de/europe/ukraine.html).  
+   > У проєкті вже є невелика мапа Києва (`map_data/kyiv_small.osm.pbf`).
 
-```bash
-CREATE DATABASE runmap;
-CREATE USER runmap_user WITH PASSWORD 'runmap_user';
-ALTER ROLE runmap_user SET client_encoding TO 'utf8';
-ALTER ROLE runmap_user SET default_transaction_isolation TO 'read committed';
-ALTER ROLE runmap_user SET timezone TO 'UTC';
-GRANT ALL PRIVILEGES ON DATABASE runmap TO runmap_user;
-```
+3. **Налаштуйте змінні оточення**  
+   Створіть файл `.env` у корені проєкту з таким вмістом:
+   ```env
+   POSTGRES_DB=runmap
+   POSTGRES_USER=runmap_user
+   POSTGRES_PASSWORD=runmap_user
+   SECRET_KEY=your-very-secret-key-change-in-production
+   DEBUG=True
+   OSRM_BASE_URL=http://osrm:5000
+   ```
 
-Підключіться до бази `runmap` та виконайте:
+4. **Запустіть усі сервіси**  
+   ```bash
+   sudo docker-compose up -d --build
+   ```
+   При першому запуску:
+   - Будуть зібрані образи бекенду та фронтенду.
+   - OSRM обробить PBF‑файл (це може зайняти кілька хвилин, залежно від розміру карти).
 
-```sql
-CREATE EXTENSION postgis;
-```
+5. **Перевірте роботу**  
+   - Фронтенд: відкрийте браузер за адресою `http://localhost`
+   - API: `http://localhost:8000/api/`
+   - Адмінка Django: `http://localhost:8000/admin/`
 
-> Параметри підключення (ім'я БД, користувач, пароль) можна змінити у файлі `backend/config/settings.py`.
+### Основні команди Docker Compose
 
-### 3. Встановлення та запуск OSRM
+| Команда                                   | Опис                                             |
+|-------------------------------------------|--------------------------------------------------|
+| `sudo docker-compose up -d`               | Запустити всі контейнери у фоновому режимі       |
+| `sudo docker-compose down`                | Зупинити та видалити контейнери (томи зберігаються) |
+| `sudo docker-compose down -v`             | Видалити також томи (база даних буде скинута)    |
+| `sudo docker-compose logs -f <service>`   | Переглянути логи конкретного сервісу             |
+| `sudo docker-compose restart <service>`   | Перезапустити сервіс                             |
+| `sudo docker-compose exec backend bash`   | Зайти в контейнер бекенду                        |
 
-Найпростіший спосіб — використати Docker. Завантажте мапу (наприклад, України) з [Geofabrik](https://download.geofabrik.de/europe/ukraine.html) та виконайте:
+### Структура Docker‑сервісів
 
-```bash
-# Завантаження PBF-файлу
-wget https://download.geofabrik.de/europe/ukraine-latest.osm.pbf
+- **db** – PostgreSQL 15 + PostGIS (порт `5432` на хості)
+- **osrm** – OSRM з картою (порт `5000`)
+- **backend** – Django (порт `8000`)
+- **frontend** – Nginx, що роздає зібраний фронтенд та проксіює API (порт `80`)
 
-# Екстракція та запуск OSRM (профіль foot)
-docker run -t -v $(pwd):/data osrm/osrm-backend osrm-extract -p /opt/foot.lua /data/ukraine-latest.osm.pbf
-docker run -t -v $(pwd):/data osrm/osrm-backend osrm-partition /data/ukraine-latest.osrm
-docker run -t -v $(pwd):/data osrm/osrm-backend osrm-customize /data/ukraine-latest.osrm
-docker run -d -p 5000:5000 -v $(pwd):/data osrm/osrm-backend osrm-routed --algorithm mld /data/ukraine-latest.osrm
-```
+> Усі сервіси об’єднані в одну мережу, тому бекенд звертається до БД за адресою `db:5432`, а до OSRM – `osrm:5000`.
 
-Після цього OSRM буде доступний за адресою `http://127.0.0.1:5000`.  
-Переконайтеся, що змінна `OSRM_BASE_URL` у `settings.py` вказує на цю адресу.
-
-### 4. Запуск Backend (Django)
-
-Перейдіть до директорії бекенду:
-
-```bash
-cd backend
-```
-
-Створіть та активуйте віртуальне середовище:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate   # Для Windows: .\venv\Scripts\activate
-```
-
-Встановіть залежності:
-
-```bash
-pip install -r requirements.txt
-```
-
-Виконайте міграції:
-
-```bash
-python manage.py migrate
-```
-
-Запустіть сервер розробки:
-
-```bash
-python manage.py runserver
-```
-
-Бекенд буде доступний на `http://127.0.0.1:8000`.
-
-### 5. Запуск Frontend (Vite)
-
-Відкрийте новий термінал, перейдіть до директорії фронтенду:
-
-```bash
-cd frontend
-```
-
-Встановіть залежності:
-
-```bash
-npm install
-```
-
-Запустіть сервер розробки:
-
-```bash
-npm run dev
-```
-
-Фронтенд зазвичай запускається на `http://localhost:5173`. Відкрийте цю адресу у браузері.
 
 ## Використання
 
@@ -154,7 +109,7 @@ npm run dev
 6. **Експортуйте GPX** для використання в інших програмах.
 7. Переглядайте **список збережених маршрутів**, завантажуйте їх на карту або знову експортуйте.
 
-## 📁 Структура проекту
+## Структура проекту
 
 ```
 runmap/
@@ -168,14 +123,21 @@ runmap/
 │   ├── src/
 │   │   ├── main.js
 │   │   ├── style.css
-│   │   └── ...
 │   ├── index.html
-│   └── package.json
+│   ├── package.json
+│   ├── nginx.conf         # Конфігурація для продакшену (використовується в Docker)
+│   └── vite.config.js
+├── map_data/              # Картографічні дані для OSRM
+│   └── kyiv_small.osm.pbf
+├── docker-compose.yml     # Оркестрація Docker-сервісів
+├── Dockerfile.backend
+├── Dockerfile.frontend
+├── .env                   # Змінні оточення для Docker
 └── README.md
 ```
 
-
-##  Подяки
+## Подяки
 
 - [OpenStreetMap](https://www.openstreetmap.org) та [OSRM](http://project-osrm.org) за картографічні дані та маршрутизацію.
 - [Leaflet](https://leafletjs.com) за чудову бібліотеку карт.
+```
