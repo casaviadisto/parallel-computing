@@ -39,11 +39,20 @@ EOF
 kubectl run map-uploader \
   --image=busybox \
   --restart=Never \
-  --overrides='{"spec":{"volumes":[{"name":"data","persistentVolumeClaim":{"claimName":"osrm-data-pvc"}}],"containers":[{"name":"map-uploader","image":"busybox","command":["sleep","3600"],"volumeMounts":[{"mountPath":"/data","name":"data"}]}]}}' \
-  --pod-running-timeout=60s 2>/dev/null || true
+  --overrides='{"spec":{"volumes":[{"name":"data","persistentVolumeClaim":{"claimName":"osrm-data-pvc"}}],"containers":[{"name":"map-uploader","image":"busybox","command":["sleep","3600"],"volumeMounts":[{"mountPath":"/data","name":"data"}]}]}}' 2>/dev/null || true
 
-echo "⏳ Waiting for uploader pod..."
-kubectl wait --for=condition=ready pod/map-uploader --timeout=60s
+# Чекаємо поки pod взагалі з'явиться в API (до 30 секунд)
+echo "⏳ Waiting for uploader pod to appear..."
+for i in $(seq 1 30); do
+  if kubectl get pod map-uploader &>/dev/null; then
+    echo "  Pod found after ${i}s"
+    break
+  fi
+  sleep 1
+done
+
+echo "⏳ Waiting for uploader pod to be ready..."
+kubectl wait --for=condition=ready pod/map-uploader --timeout=120s
 
 echo "📤 Copying map file..."
 kubectl cp map_data/kyiv_small.osm.pbf map-uploader:/data/kyiv_small.osm.pbf
