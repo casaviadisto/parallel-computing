@@ -1,0 +1,70 @@
+# ============================================================
+# 01-db.yaml — PostgreSQL 15 + PostGIS
+# ============================================================
+
+# --- Persistent storage for database ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runmap-db
+  labels:
+    app: db
+spec:
+  replicas: 1   # DB завжди 1 репліка (stateful)
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+      - name: postgres
+        image: postgis/postgis:15-3.3-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: runmap
+        - name: POSTGRES_USER
+          value: runmap_user
+        - name: POSTGRES_PASSWORD
+          value: runmap_user
+        volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql/data
+        # Health check — чекаємо, поки БД готова приймати з'єднання
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "runmap_user", "-d", "runmap"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: pgdata
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db           # Саме за цим іменем Django звертається до БД
+spec:
+  selector:
+    app: db
+  ports:
+  - port: 5432
+    targetPort: 5432

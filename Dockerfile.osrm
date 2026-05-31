@@ -1,0 +1,8 @@
+FROM osrm/osrm-backend:latest
+COPY map_data/kyiv_small.osm.pbf /data/map.osm.pbf
+RUN osrm-extract -p /opt/car.lua /data/map.osm.pbf && \
+    osrm-partition /data/map.osrm && \
+    osrm-customize /data/map.osrm && \
+    rm /data/map.osm.pbf
+EXPOSE 5000
+CMD ["osrm-routed", "--algorithm", "mld", "/data/map.osrm"]

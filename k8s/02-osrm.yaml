@@ -1,0 +1,97 @@
+# ============================================================
+# 02-osrm.yaml — OSRM routing engine
+# ============================================================
+# ВАЖЛИВО: перед kubectl apply потрібно попередньо обробити карту.
+# OSRM потребує підготовлених даних (osrm-extract + osrm-partition + osrm-customize).
+# Для Minikube найпростіший підхід — PVC з уже обробленими файлами,
+# або init-контейнер, що робить це при першому старті.
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: osrm-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runmap-osrm
+  labels:
+    app: osrm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: osrm
+  template:
+    metadata:
+      labels:
+        app: osrm
+    spec:
+      # Init-контейнер обробляє карту один раз і зберігає результат у PVC
+      initContainers:
+      - name: osrm-prepare
+        image: osrm/osrm-backend:latest
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          DATA_DIR=/data
+          PBF_FILE=${DATA_DIR}/kyiv_small.osm.pbf
+
+          # Якщо карта вже оброблена — пропускаємо
+          if [ -f "${DATA_DIR}/kyiv_small.osrm" ]; then
+            echo "✅ OSRM data already prepared, skipping."
+            exit 0
+          fi
+
+          echo "🗺️  Preparing OSRM data (this takes a few minutes)..."
+          osrm-extract -p /opt/foot.lua ${PBF_FILE}
+          osrm-partition ${DATA_DIR}/kyiv_small.osrm
+          osrm-customize ${DATA_DIR}/kyiv_small.osrm
+          echo "✅ OSRM data ready."
+        volumeMounts:
+        - name: osrm-data
+          mountPath: /data
+
+      containers:
+      - name: osrm
+        image: osrm/osrm-backend:latest
+        command:
+        - osrm-routed
+        - --algorithm=MLD
+        - /data/kyiv_small.osrm
+        ports:
+        - containerPort: 5000
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        volumeMounts:
+        - name: osrm-data
+          mountPath: /data
+      volumes:
+      - name: osrm-data
+        persistentVolumeClaim:
+          claimName: osrm-data-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: osrm          # Django звертається до OSRM за цим іменем
+spec:
+  selector:
+    app: osrm
+  ports:
+  - port: 5000
+    targetPort: 5000

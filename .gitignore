@@ -48,3 +48,29 @@ env/
 
 # Медіафайли Django
 media/
+map_data/kyiv_small.osrm.cell_metrics
+.gitignore
+map_data/kyiv_small.osrm.cells
+map_data/kyiv_small.osrm.cnbg_to_ebg
+map_data/kyiv_small.osrm.cnbg
+map_data/kyiv_small.osrm.ebg
+map_data/kyiv_small.osrm.datasource_names
+map_data/kyiv_small.osrm.ebg_nodes
+map_data/kyiv_small.osrm.edges
+map_data/kyiv_small.osrm.enw
+map_data/kyiv_small.osrm.geometry
+map_data/kyiv_small.osrm.icd
+map_data/kyiv_small.osrm.fileIndex
+map_data/kyiv_small.osrm.maneuver_overrides
+map_data/kyiv_small.osrm.mldgr
+map_data/kyiv_small.osrm.nbg_nodes
+map_data/kyiv_small.osrm.names
+map_data/kyiv_small.osrm.partition
+map_data/kyiv_small.osrm.properties
+map_data/kyiv_small.osrm.ramIndex
+map_data/kyiv_small.osrm.timestamp
+map_data/kyiv_small.osrm.restrictions
+map_data/kyiv_small.osrm.tld
+map_data/kyiv_small.osrm.tls
+map_data/kyiv_small.osrm.turn_duration_penalties
+map_data/kyiv_small.osrm.turn_weight_penalties

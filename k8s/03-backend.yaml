@@ -1,0 +1,82 @@
+# ============================================================
+# 03-backend.yaml — Django REST Framework backend
+# ============================================================
+
+# ConfigMap зберігає не-секретні змінні оточення
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  DEBUG: "True"
+  POSTGRES_DB: "runmap"
+  POSTGRES_USER: "runmap_user"
+  POSTGRES_HOST: "db"           # Ім'я Service з 01-db.yaml
+  POSTGRES_PORT: "5432"
+  OSRM_BASE_URL: "http://osrm:5000"   # Ім'я Service з 02-osrm.yaml
+
+---
+# Secret зберігає чутливі дані (паролі, секретні ключі)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secret
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "runmap_user"
+  SECRET_KEY: "django-insecure-change-me-in-production-k8s"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runmap-backend
+  labels:
+    app: backend
+spec:
+  replicas: 2       # ← 2 репліки — виконуємо вимогу методички!
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: runmap-backend:latest
+        imagePullPolicy: Never      # Використовуємо локально зібраний образ
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: backend-config
+        - secretRef:
+            name: backend-secret
+        # Перевірка готовності — запити йдуть тільки до готового поду
+        readinessProbe:
+          httpGet:
+            path: /api/
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        # Перевірка живості — k8s перезапускає под якщо він завис
+        livenessProbe:
+          httpGet:
+            path: /api/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 15
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend       # Nginx (frontend) звертається за цим іменем
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
